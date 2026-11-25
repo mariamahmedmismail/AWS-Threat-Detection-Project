@@ -39,7 +39,7 @@ export BUDGET_EMAIL="you@example.com"
 
 ## Execution
 
-Run the scripts in order from the `week1-logging` folder. Later steps depend on earlier ones.
+Run the scripts in order from the `logging-and-audit` folder. Later steps depend on earlier ones.
 
 ```bash
 bash scripts/01-budget.sh
