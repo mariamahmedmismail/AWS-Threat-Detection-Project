@@ -1,0 +1,6 @@
+*.filled.json
+out.json
+*.zip
+__pycache__/
+.pytest_cache/
+venv/
