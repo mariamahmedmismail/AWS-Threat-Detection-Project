@@ -1,0 +1,5 @@
+# The Lambda itself needs nothing extra: boto3 is included in the Python 3.12 Lambda runtime.
+# These are only for running the tests on your laptop.
+boto3
+moto[ec2,iam,s3,sns,sqs]>=5
+pytest

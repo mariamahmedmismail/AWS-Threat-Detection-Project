@@ -1,0 +1,13 @@
+[
+  {
+    "Id": "ir-dispatcher",
+    "Arn": "arn:aws:lambda:REGION:ACCOUNT_ID:function:ir-dispatcher",
+    "RetryPolicy": {
+      "MaximumRetryAttempts": 3,
+      "MaximumEventAgeInSeconds": 3600
+    },
+    "DeadLetterConfig": {
+      "Arn": "arn:aws:sqs:REGION:ACCOUNT_ID:ir-eventbridge-dlq"
+    }
+  }
+]

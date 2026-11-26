@@ -1,0 +1,5 @@
+{
+  "OnFailure": {
+    "Destination": "arn:aws:sqs:REGION:ACCOUNT_ID:ir-lambda-dlq"
+  }
+}
