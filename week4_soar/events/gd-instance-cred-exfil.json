@@ -19,7 +19,7 @@
     "resource": {
       "resourceType": "AccessKey",
       "accessKeyDetails": {
-        "accessKeyId": "ASIAIOSFODNN7EXAMPLE",
+        "accessKeyId": "FAKEROLESESSION0001",
         "userName": "ec2-app-role",
         "userType": "AssumedRole"
       }

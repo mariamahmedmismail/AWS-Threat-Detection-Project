@@ -27,10 +27,10 @@
         "Resources": [
           {
             "Type": "AwsIamAccessKey",
-            "Id": "AWS::IAM::AccessKey:AKIAIOSFODNN7ADMIN01",
+            "Id": "AWS::IAM::AccessKey:FAKEADMINKEY0001",
             "Details": {
               "AwsIamAccessKey": {
-                "AccessKeyId": "AKIAIOSFODNN7ADMIN01",
+                "AccessKeyId": "FAKEADMINKEY0001",
                 "PrincipalName": "admin-user",
                 "PrincipalType": "IAMUser"
               }

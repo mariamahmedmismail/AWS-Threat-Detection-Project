@@ -9,7 +9,7 @@ Design: `docs/soar-automation-flow.md` · Contracts: `docs/api-interface-documen
 
 ## Folder layout
 
-```
+```text
 lambda/ir_dispatcher/   the function (deploy this folder)
   handler.py            entry point: lambda_handler; processing order, skip rules, result
   normalize.py          GuardDuty / Security Hub event -> one Finding shape
@@ -67,7 +67,7 @@ $ACCOUNT="123456789012"; $REGION="us-east-1"; $BUCKET="ir-evidence-bucket"; $LOG
 $VPC="vpc-xxxxxxxx"
 ```
 
-**a. Fill the placeholders in the IAM and template files**
+### a. Fill the placeholders in the IAM and template files
 
 ```powershell
 Get-ChildItem iam\*.json -Exclude *.filled.json | ForEach-Object {
@@ -75,7 +75,7 @@ Get-ChildItem iam\*.json -Exclude *.filled.json | ForEach-Object {
     Set-Content ($_.FullName -replace '\.json$','.filled.json') }
 ```
 
-**b. Queues, topic, isolation security group**
+### b. Queues, topic, isolation security group
 
 ```powershell
 aws sqs create-queue --queue-name ir-lambda-dlq
@@ -89,7 +89,7 @@ aws ec2 revoke-security-group-egress --group-id $SG --ip-permissions "IpProtocol
 Then replace `ISOLATION_SG_ID` in `iam\ir-dispatcher-policy.filled.json` with the value of `$SG`.
 (SSM forensics through VPC endpoints is decided with Ganna; see API doc section 5.3.)
 
-**c. Role and function**
+### c. Role and function
 
 ```powershell
 aws iam create-role --role-name ir-dispatcher-role --assume-role-policy-document file://iam/lambda-trust-policy.json
@@ -108,7 +108,7 @@ aws lambda put-function-event-invoke-config --function-name ir-dispatcher --maxi
 To update the code later: `Compress-Archive ... -Force` again, then
 `aws lambda update-function-code --function-name ir-dispatcher --zip-file fileb://ir-dispatcher.zip`.
 
-**c2. Evidence bucket (with Ganna; do this before step c)**
+### c2. Evidence bucket (with Ganna; do this before step c)
 
 Object Lock must be switched on when the bucket is created; it also turns on versioning. GOVERNANCE mode protects evidence from normal deletes but can still be removed by an admin with special permission, which is the right level for a lab (COMPLIANCE mode cannot be undone, even by the root user, until the retention ends).
 
@@ -121,7 +121,7 @@ aws s3api put-bucket-policy --bucket $BUCKET --policy file://iam/evidence-bucket
 
 New buckets are encrypted (SSE-S3) by default. If the team's KMS requirement applies to evidence too, add `put-bucket-encryption` with the team key.
 
-**c3. Forensics runbook and its role**
+### c3. Forensics runbook and its role
 
 ```powershell
 aws iam create-role --role-name ir-forensics-automation-role --assume-role-policy-document file://iam/forensics-automation-trust-policy.filled.json
@@ -137,7 +137,7 @@ Test the runbook on a **non-isolated** sandbox instance first:
 aws ssm start-automation-execution --document-name IR-CollectEC2Forensics --parameters "InstanceId=i-xxxxxxxx,EvidenceBucket=$BUCKET,FindingId=manual-test-1,AutomationAssumeRole=arn:aws:iam::${ACCOUNT}:role/ir-forensics-automation-role"
 ```
 
-**d. Test the function directly (still dry-run)**
+### d. Test the function directly (still dry-run)
 
 Put a real sandbox instance ID into a copy of `events/gd-ec2-high.json`, then:
 
@@ -148,7 +148,7 @@ Get-Content out.json
 
 Expected `"status": "dry_run"` and a record under `s3://<bucket>/actions/`.
 
-**e. EventBridge rules (after the direct test works)**
+### e. EventBridge rules (after the direct test works)
 
 ```powershell
 foreach ($r in "ir-auto-contain-high","ir-auto-contain-keys","ir-analyst-action") {
@@ -168,7 +168,7 @@ Check a rule matches an event without sending anything:
 aws events test-event-pattern --event-pattern file://rules/ir-auto-contain-high.json --event file://events/gd-ec2-high.json
 ```
 
-**e2. Forensics on isolated instances (option b, decide with Ganna)**
+### e2. Forensics on isolated instances (option b, decide with Ganna)
 
 The isolation group blocks all outbound traffic, so an isolated instance's SSM agent cannot reach SSM. Option (b) lets it reach **only** AWS endpoints inside the VPC:
 
@@ -186,11 +186,12 @@ aws ec2 authorize-security-group-egress --group-id $SG --ip-permissions "IpProto
 ```
 
 Trade-offs to state in the report:
+
 - Interface endpoints are billed per hour. Create them for the scenario week and delete them afterwards (`aws ec2 delete-vpc-endpoints`).
 - The S3 endpoint policy allows **only** uploads to `forensics/*` in the evidence bucket, so malware on an isolated instance cannot use it to send data to another bucket. But it applies to **every** instance whose route table uses this endpoint, so use it only in the scenario VPC.
 - Isolated instances can now reach the SSM endpoints. That is the price of remote forensics; the alternative is option (a), collecting before isolating.
 
-**f. End to end with GuardDuty sample findings**
+### f. End to end with GuardDuty sample findings
 
 ```powershell
 aws lambda update-function-configuration --function-name ir-dispatcher --environment "Variables={DRY_RUN=true,ALLOW_SAMPLE_FINDINGS=true,REQUIRE_SANDBOX_TAG=true,EVIDENCE_BUCKET=$BUCKET,ISOLATION_SG_ID=$SG,SNS_TOPIC_ARN=arn:aws:sns:${REGION}:${ACCOUNT}:ir-alerts,AUTOMATION_ROLE_ARN=arn:aws:iam::${ACCOUNT}:role/ir-forensics-automation-role}"
@@ -216,13 +217,13 @@ aws sqs get-queue-attributes --queue-url https://sqs.$REGION.amazonaws.com/$ACCO
 |---|---|
 | Team decision: keep automatic key deactivation (rule `ir-auto-contain-keys`) or make it an analyst click | 6 Nov |
 | Confirm `userName` = role name with a real temporary-credential finding | Scenario week |
-| `ir-analyst-action` rule, after Member 6 creates the Security Hub custom actions | 26 - 30 Nov |
 | IaC version of these CLI steps | 26 - 30 Nov |
 | Live tests against the Week 3 scenario resources | 26 - 30 Nov |
 
 ## Reversing a containment
 
 Every record has `previous_state`. To undo by hand:
+
 - EC2: `aws ec2 modify-instance-attribute --instance-id <id> --groups <original sg ids>`
 - Access key: `aws iam update-access-key --user-name <user> --access-key-id <key> --status Active`
 - Sessions: `aws iam delete-role-policy` / `delete-user-policy` with policy name `IrRevokeOlderSessions`

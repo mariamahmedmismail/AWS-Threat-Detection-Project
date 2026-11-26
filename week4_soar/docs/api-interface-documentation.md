@@ -189,7 +189,7 @@ Security Hub renames GuardDuty finding types: `UnauthorizedAccess:EC2/SSHBruteFo
 ```
 
 > **S3 severities (checked in the GuardDuty docs):** `Policy:S3/BucketAnonymousAccessGranted` and `Policy:S3/BucketPublicAccessGranted` are **High**, so this rule auto-contains them; these are exactly the public-bucket scenario. `Policy:S3/BucketBlockPublicAccessDisabled` and `Policy:S3/AccountBlockPublicAccessDisabled` are **Low** (turning Block Public Access off does not by itself make a bucket public), so they are not auto-contained.
-
+>
 > **EC2 coverage (checked in the GuardDuty docs):** the 20 EC2 types with default severity High are under `Backdoor`, `CryptoCurrency`, `Impact`, `Recon`, `Trojan` and `UnauthorizedAccess`. All are auto-contained except `Recon:EC2/PortProbeEMRUnprotectedPort`: there the instance is the **target** of a probe, and isolating a victim is the wrong response, so it is notify-only. Any High finding this rule does not match is still caught by `ir-notify` below, so **no finding of severity 4 or more goes unreported**.
 
 **Rule `ir-auto-contain-keys`** (target: `ir-dispatcher`)
@@ -238,7 +238,7 @@ Every finding of severity 4 or more, including the ones the Lambda also handles.
 }
 ```
 
-**Target settings (all three Lambda targets):**
+Target settings (all three Lambda targets):
 
 | Setting | Value | Why |
 |---|---|---|
@@ -331,6 +331,7 @@ The first step converts either event into one shape, so every later step handles
 | `block_public_access` | S3 | auto | `s3:PutPublicAccessBlock` | All four settings `true` | Yes |
 
 Notes:
+
 - For instances with more than one network interface, `ModifyInstanceAttribute` can fail (AWS docs), so the Lambda automatically calls `ModifyNetworkInterfaceAttribute` on each interface instead. No analyst step is needed.
 - Security groups are stateful: connections already open may continue after the swap. This is documented as a known limitation in the SOAR design.
 - Keys are never deleted and buckets are never deleted: deletion destroys evidence and cannot be undone.
@@ -517,7 +518,8 @@ Member 6 owns the human-readable email template built from these fields.
 
 Not granted on purpose: any `Delete*` action, `iam:DeleteAccessKey`, `s3:DeleteBucket`, `ec2:TerminateInstances`.
 
-**Known limits of this policy (accepted for the lab, stated so reviewers do not have to find them):**
+Known limits of this policy (accepted for the lab, stated so reviewers do not have to find them):
+
 - `iam:PutUserPolicy` and `iam:PutRolePolicy` can write *any* inline policy, including an `Allow *`. IAM has no condition key that restricts the content of an inline policy, so whoever can change the Lambda's code could misuse the role. Mitigations: the code only ever writes the fixed deny policy; the actions are limited to resources tagged `env=sandbox`; and only Muhammad and Member 6 may update the function (`lambda:UpdateFunctionCode`).
 - `ModifyNetworkInterfaceAttribute` and the S3 `PutBucketPublicAccessBlock` / `PutBucketTagging` statements have no `env=sandbox` condition, because network interfaces are usually untagged and bucket-tag conditions were not verified. For these, the sandbox limit is enforced by the code's scope check only.
 
@@ -566,7 +568,7 @@ Note: do not plan to fake GuardDuty or Security Hub events with `aws events put-
 | # | Item | Owner | Due |
 |---|---|---|---|
 | 1 | Confirm `userName` = role name for temporary-credential findings (sample findings reaching EventBridge: **confirmed** 25 Nov) | Muhammad | Scenario week |
-| 2 | Create custom actions `IsolateResource`, `CollectForensics` and share ARNs | Member 6 | 13 Nov |
+| 2 | Custom actions `IsolateResource`, `CollectForensics` created by Member 6 and connected through rule `ir-analyst-action` | Member 6 + Muhammad | Done (26 Nov) |
 | 3 | Isolation vs SSM: **decided** – run forensics before isolation; no VPC endpoints (about $20/month). An isolated instance cannot reach SSM (documented limitation) | Muhammad + Ganna | Done |
 | 4 | Region **eu-north-1**; evidence bucket `depi-ir-automation-evidence-<account>` (Object Lock, GOVERNANCE 30 days) | Muhammad | Done |
 | 5 | Agree the auto-contain finding list | Team | 6 Nov |
@@ -582,10 +584,11 @@ Deployed with the AWS CLI from CloudShell into the team account, region eu-north
 | Direct invoke, dry run on a real sandbox instance | `dry_run`, 4 steps planned, nothing changed |
 | Live containment on a real sandbox instance | `ok`, 4/4 steps (metadata, snapshot, isolation SG, tag) in **about 5 s** (KPI: automated response ≤ 2 min) |
 | GuardDuty sample finding → EventBridge → Lambda | Received automatically, `skipped: sample_finding` record within seconds |
+| Security Hub custom action → `ir-analyst-action` → Lambda | Analyst click reached the Lambda (`triggered_by: analyst`), 26 Nov |
 | `ir-notify` rule → SNS | Email received for the sample finding (severity ≥ 4) |
 | SSM runbook `IR-CollectEC2Forensics` | 3/3 steps succeeded after adding `ec2:DescribeTags`; 9 evidence files + `SHA256SUMS` in S3; `sha256sum -c` all OK (evidence unchanged) |
 
-**Constraints found in the account**
+### Constraints found in the account
 
 | Constraint | Effect | Handling |
 |---|---|---|
@@ -605,13 +608,13 @@ Deployed with the AWS CLI from CloudShell into the team account, region eu-north
 
 ## Sources checked (1 Nov 2026)
 
-- GuardDuty, processing findings with EventBridge: https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_findings_eventbridge.html
-- GuardDuty severity levels: https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_findings-severity.html
-- GuardDuty sample findings: https://docs.aws.amazon.com/guardduty/latest/ug/sample_findings.html
-- GuardDuty S3 finding types (resource types and default severities): https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_finding-types-s3.html
-- GuardDuty integration with Security Hub (ASFF type mapping): https://docs.aws.amazon.com/guardduty/latest/ug/securityhub-integration.html
-- Security Hub EventBridge event formats (custom actions): https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-cwe-event-formats.html
-- ASFF AwsIamAccessKey details: https://docs.aws.amazon.com/securityhub/latest/userguide/asff-resourcedetails-awsiam.html
-- EC2 ModifyInstanceAttribute (multiple network interfaces note): https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_ModifyInstanceAttribute.html
-- EC2 security group connection tracking: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/security-group-connection-tracking.html
-- Resolving GuardDuty credential exfiltration findings: https://aws.amazon.com/premiumsupport/knowledge-center/resolve-guardduty-credential-alerts/
+- GuardDuty, processing findings with EventBridge: <https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_findings_eventbridge.html>
+- GuardDuty severity levels: <https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_findings-severity.html>
+- GuardDuty sample findings: <https://docs.aws.amazon.com/guardduty/latest/ug/sample_findings.html>
+- GuardDuty S3 finding types (resource types and default severities): <https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_finding-types-s3.html>
+- GuardDuty integration with Security Hub (ASFF type mapping): <https://docs.aws.amazon.com/guardduty/latest/ug/securityhub-integration.html>
+- Security Hub EventBridge event formats (custom actions): <https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-cwe-event-formats.html>
+- ASFF AwsIamAccessKey details: <https://docs.aws.amazon.com/securityhub/latest/userguide/asff-resourcedetails-awsiam.html>
+- EC2 ModifyInstanceAttribute (multiple network interfaces note): <https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_ModifyInstanceAttribute.html>
+- EC2 security group connection tracking: <https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/security-group-connection-tracking.html>
+- Resolving GuardDuty credential exfiltration findings: <https://aws.amazon.com/premiumsupport/knowledge-center/resolve-guardduty-credential-alerts/>

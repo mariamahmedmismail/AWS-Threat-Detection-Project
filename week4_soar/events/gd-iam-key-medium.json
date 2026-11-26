@@ -19,7 +19,7 @@
     "resource": {
       "resourceType": "AccessKey",
       "accessKeyDetails": {
-        "accessKeyId": "AKIAIOSFODNN7EXAMPLE",
+        "accessKeyId": "FAKEUSERKEY0001",
         "userName": "backup",
         "userType": "IAMUser"
       }

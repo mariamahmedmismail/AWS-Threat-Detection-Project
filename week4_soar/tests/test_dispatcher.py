@@ -23,9 +23,9 @@ def test_normalize_all_sample_events():
     from normalize import normalize_event
     expected = {
         "gd-ec2-high.json": ("Instance", "i-0abc1234567890def", None, "auto"),
-        "gd-iam-key-medium.json": ("AccessKey", "AKIAIOSFODNN7EXAMPLE", "backup", "auto"),
+        "gd-iam-key-medium.json": ("AccessKey", "FAKEUSERKEY0001", "backup", "auto"),
         "gd-s3-public.json": ("S3Bucket", "ir-sandbox-public-bucket", None, "auto"),
-        "gd-instance-cred-exfil.json": ("AccessKey", "ASIAIOSFODNN7EXAMPLE", "ec2-app-role", "auto"),
+        "gd-instance-cred-exfil.json": ("AccessKey", "FAKEROLESESSION0001", "ec2-app-role", "auto"),
         "sh-custom-s3.json": ("S3Bucket", "ir-sandbox-public-bucket", None, "analyst"),
         "gd-unsupported.json": (None, None, None, "auto"),
         "sh-custom-isolate.json": ("Instance", "i-0abc1234567890def", None, "analyst"),
@@ -121,7 +121,7 @@ def test_live_ec2_isolation(aws, invoke):
 
 def test_live_access_key_deactivated_not_deleted(aws, invoke):
     go_live(aws)
-    out = invoke(load_event("gd-iam-key-medium.json", AKIAIOSFODNN7EXAMPLE=aws["key_id"]))["results"][0]
+    out = invoke(load_event("gd-iam-key-medium.json", FAKEUSERKEY0001=aws["key_id"]))["results"][0]
     assert out["status"] == "ok"
     keys = aws["iam"].list_access_keys(UserName="backup")["AccessKeyMetadata"]
     assert [(k["AccessKeyId"], k["Status"]) for k in keys] == [(aws["key_id"], "Inactive")]
@@ -220,7 +220,7 @@ def test_public_bucket_finding_blocks_bucket_and_leaves_admin_key_alone(aws, inv
     """GuardDuty reports Policy:S3 findings with resourceType AccessKey. The old code deactivated
     the key of whoever changed the policy and never closed the bucket."""
     go_live(aws)
-    out = invoke(load_event("gd-s3-public.json", AKIAIOSFODNN7ADMIN01=aws["admin_key"]))["results"][0]
+    out = invoke(load_event("gd-s3-public.json", FAKEADMINKEY0001=aws["admin_key"]))["results"][0]
     assert out["status"] == "ok"
     pab = aws["s3"].get_public_access_block(Bucket="ir-sandbox-public-bucket")["PublicAccessBlockConfiguration"]
     assert all(pab.values())
@@ -247,8 +247,8 @@ def test_analyst_revokes_sessions_for_temporary_credentials(aws, invoke):
     ev = load_event("sh-custom-isolate.json")
     f = ev["detail"]["findings"][0]
     f["Types"] = ["TTPs/Exfiltration/UnauthorizedAccess:IAMUser-InstanceCredentialExfiltration.OutsideAWS"]
-    f["Resources"] = [{"Type": "AwsIamAccessKey", "Id": "AWS::IAM::AccessKey:ASIAIOSFODNN7EXAMPLE",
-                       "Details": {"AwsIamAccessKey": {"AccessKeyId": "ASIAIOSFODNN7EXAMPLE",
+    f["Resources"] = [{"Type": "AwsIamAccessKey", "Id": "AWS::IAM::AccessKey:FAKEROLESESSION0001",
+                       "Details": {"AwsIamAccessKey": {"AccessKeyId": "FAKEROLESESSION0001",
                                                        "PrincipalName": "ec2-app-role", "PrincipalType": "AssumedRole"}}}]
     out = invoke(ev)["results"][0]
     assert out["status"] == "ok", records(aws)[0]["steps"]
@@ -352,7 +352,7 @@ def test_nothing_of_severity_4_or_more_is_silent():
 
 def test_medium_exposed_key_is_deactivated(aws, invoke):
     go_live(aws)
-    out = invoke(load_event("gd-iam-key-medium.json", AKIAIOSFODNN7EXAMPLE=aws["key_id"]))["results"][0]
+    out = invoke(load_event("gd-iam-key-medium.json", FAKEUSERKEY0001=aws["key_id"]))["results"][0]
     assert out["status"] == "ok"
     assert aws["iam"].list_access_keys(UserName="backup")["AccessKeyMetadata"][0]["Status"] == "Inactive"
 
