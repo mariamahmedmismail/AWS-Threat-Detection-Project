@@ -1,0 +1,3 @@
+{
+  "Policy": "{\"Version\": \"2012-10-17\", \"Statement\": [{\"Effect\": \"Allow\", \"Principal\": {\"Service\": \"events.amazonaws.com\"}, \"Action\": \"sqs:SendMessage\", \"Resource\": \"arn:aws:sqs:REGION:ACCOUNT_ID:ir-eventbridge-dlq\", \"Condition\": {\"ArnLike\": {\"aws:SourceArn\": \"arn:aws:events:REGION:ACCOUNT_ID:rule/ir-*\"}}}]}"
+}

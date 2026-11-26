@@ -1,0 +1,41 @@
+{
+  "source": [
+    "aws.guardduty"
+  ],
+  "detail-type": [
+    "GuardDuty Finding"
+  ],
+  "detail": {
+    "severity": [
+      {
+        "numeric": [
+          ">=",
+          7
+        ]
+      }
+    ],
+    "type": [
+      {
+        "prefix": "CryptoCurrency:EC2/"
+      },
+      {
+        "prefix": "Backdoor:EC2/"
+      },
+      {
+        "prefix": "Trojan:EC2/"
+      },
+      {
+        "prefix": "Impact:EC2/"
+      },
+      {
+        "prefix": "UnauthorizedAccess:EC2/"
+      },
+      {
+        "prefix": "UnauthorizedAccess:IAMUser/"
+      },
+      {
+        "prefix": "Policy:S3/"
+      }
+    ]
+  }
+}

@@ -1,0 +1,83 @@
+# SSM Automation runbook: collect volatile evidence from a suspect EC2 instance (API doc section 5).
+# Create it with:
+#   aws ssm create-document --name IR-CollectEC2Forensics --document-type Automation \
+#       --document-format YAML --content file://ssm/IR-CollectEC2Forensics.yaml
+schemaVersion: '0.3'
+description: >-
+  Collects processes, network connections, logins, auth logs and cron entries from a suspect
+  instance, hashes every file (SHA256SUMS) and uploads everything to the evidence bucket under
+  forensics/<FindingId>/. Read-only on the instance: nothing is changed or deleted there.
+assumeRole: '{{ AutomationAssumeRole }}'
+parameters:
+  InstanceId:
+    type: String
+    description: Suspect instance
+    allowedPattern: '^i-[a-z0-9]{8,17}$'
+  EvidenceBucket:
+    type: String
+    description: Evidence bucket name
+    allowedPattern: '^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$'
+  FindingId:
+    type: String
+    description: S3-safe finding ID (the Lambda replaces ':' and '/' with '_')
+    allowedPattern: '^[A-Za-z0-9._-]{1,200}$'
+  AutomationAssumeRole:
+    type: String
+    description: ARN of ir-forensics-automation-role
+    allowedPattern: '^arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+$'
+mainSteps:
+  - name: waitForSsmAgent
+    description: The SSM agent must be online; if the instance is already isolated, this needs the VPC endpoints from the README.
+    action: aws:waitForAwsResourceProperty
+    timeoutSeconds: 300
+    onFailure: Abort
+    inputs:
+      Service: ssm
+      Api: DescribeInstanceInformation
+      InstanceInformationFilterList:
+        - key: InstanceIds
+          valueSet:
+            - '{{ InstanceId }}'
+      PropertySelector: '$.InstanceInformationList[0].PingStatus'
+      DesiredValues:
+        - Online
+  - name: collectHashAndUpload
+    action: aws:runCommand
+    timeoutSeconds: 900
+    onFailure: Abort
+    inputs:
+      DocumentName: AWS-RunShellScript
+      InstanceIds:
+        - '{{ InstanceId }}'
+      Parameters:
+        executionTimeout: '900'
+        commands:
+          - |
+            set -u
+            OUT="/tmp/ir-forensics-{{ FindingId }}"
+            mkdir -p "$OUT"
+            date -u +%Y-%m-%dT%H:%M:%SZ > "$OUT/collected_at.txt"
+            hostname > "$OUT/hostname.txt" 2>&1
+            ps auxww > "$OUT/processes.txt" 2>&1
+            (ss -tunap 2>/dev/null || netstat -tunap) > "$OUT/network_connections.txt" 2>&1
+            who -a > "$OUT/logged_in_users.txt" 2>&1
+            last -n 50 > "$OUT/recent_logins.txt" 2>&1
+            (journalctl --since "24 hours ago" --no-pager 2>/dev/null | tail -n 5000 \
+              || tail -n 5000 /var/log/secure 2>/dev/null || tail -n 5000 /var/log/auth.log) > "$OUT/auth_and_system_log.txt" 2>&1
+            (crontab -l; ls -la /etc/cron*) > "$OUT/cron.txt" 2>&1
+            (cat /etc/passwd; echo; ls -la /home /root/.ssh 2>/dev/null) > "$OUT/accounts_and_keys.txt" 2>&1
+            cd "$OUT" && sha256sum *.txt > SHA256SUMS
+            aws s3 cp "$OUT" "s3://{{ EvidenceBucket }}/forensics/{{ FindingId }}/" --recursive
+  - name: tagInstance
+    action: aws:createTags
+    onFailure: Continue
+    inputs:
+      ResourceType: EC2
+      ResourceIds:
+        - '{{ InstanceId }}'
+      Tags:
+        - Key: 'ir:forensics'
+          Value: collected
+outputs:
+  - collectHashAndUpload.CommandId
+  - collectHashAndUpload.Status
